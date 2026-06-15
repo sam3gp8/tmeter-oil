@@ -20,24 +20,30 @@ from .const import (
     CONF_CLOUD_PORT,
     CONF_ENABLE_PASSTHROUGH,
     CONF_FORWARD_CLOUD,
+    CONF_GAL_PER_INCH,
     CONF_HOST,
-    CONF_INVERT_LEVEL,
     CONF_KWH_PER_GALLON,
+    CONF_ORIENTATION,
     CONF_PASSTHROUGH_PORT,
     CONF_PORT,
+    CONF_RAW_DIVISOR,
     CONF_REFILL_THRESHOLD,
     CONF_TANK_GALLONS,
+    CONF_TANK_HEIGHT,
     DEFAULT_CLOUD_HOST,
     DEFAULT_CLOUD_PORT,
     DEFAULT_ENABLE_PASSTHROUGH,
     DEFAULT_FORWARD_CLOUD,
+    DEFAULT_GAL_PER_INCH,
     DEFAULT_HOST,
-    DEFAULT_INVERT_LEVEL,
     DEFAULT_KWH_PER_GALLON,
+    DEFAULT_ORIENTATION,
     DEFAULT_PASSTHROUGH_PORT,
     DEFAULT_PORT,
+    DEFAULT_RAW_DIVISOR,
     DEFAULT_REFILL_THRESHOLD,
     DEFAULT_TANK_GALLONS,
+    DEFAULT_TANK_HEIGHT,
     DOMAIN,
 )
 from .coordinator import TMeterDataCoordinator
@@ -65,7 +71,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     refill_threshold = entry.options.get(
         CONF_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD
     )
-    invert_level = entry.options.get(CONF_INVERT_LEVEL, DEFAULT_INVERT_LEVEL)
+    orientation = entry.options.get(CONF_ORIENTATION, DEFAULT_ORIENTATION)
+    tank_height = entry.options.get(CONF_TANK_HEIGHT, DEFAULT_TANK_HEIGHT)
+    raw_divisor = entry.options.get(CONF_RAW_DIVISOR, DEFAULT_RAW_DIVISOR)
+    gal_per_inch = entry.options.get(CONF_GAL_PER_INCH, DEFAULT_GAL_PER_INCH)
     enable_passthrough = entry.options.get(
         CONF_ENABLE_PASSTHROUGH, DEFAULT_ENABLE_PASSTHROUGH
     )
@@ -76,10 +85,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = TMeterDataCoordinator(
         hass,
         entry,
-        tank_gallons=tank_gallons,
+        rated_gallons=tank_gallons,
         kwh_per_gallon=kwh_per_gallon,
         refill_threshold=refill_threshold,
-        invert_level=invert_level,
+        orientation=orientation,
+        tank_height_in=tank_height,
+        raw_divisor=raw_divisor,
+        gal_per_inch=gal_per_inch,
     )
     await coordinator.async_load_state()
 

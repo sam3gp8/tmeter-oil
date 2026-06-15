@@ -19,6 +19,7 @@ from .const import (
     EVENT_REFILL,
     LITERS_PER_GALLON,
     SIGNAL_NEW_DEVICE,
+    compute_levels,
     parse_frame,
 )
 
@@ -40,17 +41,23 @@ class TMeterDataCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         hass: HomeAssistant,
         entry: ConfigEntry,
         *,
-        tank_gallons: float,
+        rated_gallons: float,
         kwh_per_gallon: float,
         refill_threshold: float,
-        invert_level: bool,
+        orientation: str,
+        tank_height_in: float,
+        raw_divisor: float,
+        gal_per_inch: float,
     ) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN)
         self.entry = entry
-        self._tank_gallons = tank_gallons
+        self._rated_gallons = rated_gallons
         self._kwh_per_gallon = kwh_per_gallon
         self._refill_threshold = refill_threshold
-        self._invert_level = invert_level
+        self._orientation = orientation
+        self._tank_height_in = tank_height_in
+        self._raw_divisor = raw_divisor
+        self._gal_per_inch = gal_per_inch
         self.data = {}
         # Persistent odometer: {device_id: {"last_gal": float, "consumed_gal": float}}
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
@@ -64,9 +71,17 @@ class TMeterDataCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     async def async_handle_frame(self, raw: bytes, source: str) -> None:
         """Parse one frame, update derived values, and notify listeners."""
-        parsed = parse_frame(raw, self._tank_gallons, self._invert_level)
-        if not parsed:
+        raw_fields = parse_frame(raw)
+        if not raw_fields:
             return
+        parsed = compute_levels(
+            raw_fields,
+            orientation=self._orientation,
+            tank_height_in=self._tank_height_in,
+            raw_divisor=self._raw_divisor,
+            gal_per_inch=self._gal_per_inch,
+            rated_gallons=self._rated_gallons,
+        )
 
         device_id = parsed["device_id"]
         now = time.time()

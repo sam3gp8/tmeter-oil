@@ -20,6 +20,7 @@ by adding a local DNS rewrite for the device's cloud hostname.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,9 +48,16 @@ CONF_CLOUD_HOST = "cloud_host"
 CONF_CLOUD_PORT = "cloud_port"
 CONF_OFFLINE_AFTER = "offline_after_minutes"
 CONF_REFILL_THRESHOLD = "refill_threshold_gallons"
-CONF_INVERT_LEVEL = "invert_level"
 CONF_ENABLE_PASSTHROUGH = "enable_app_passthrough"
 CONF_PASSTHROUGH_PORT = "passthrough_port"
+# Tank geometry / calibration (level is derived from the raw ullage reading)
+CONF_ORIENTATION = "orientation"
+CONF_TANK_HEIGHT = "tank_height_inches"
+CONF_RAW_DIVISOR = "raw_divisor"
+CONF_GAL_PER_INCH = "gallons_per_inch"
+
+ORIENTATION_VERTICAL = "vertical"
+ORIENTATION_HORIZONTAL = "horizontal"
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -63,9 +71,14 @@ DEFAULT_CLOUD_HOST = "45.77.120.52"
 DEFAULT_CLOUD_PORT = 9678
 DEFAULT_OFFLINE_AFTER = 0  # minutes; 0 = device stays "available" once seen
 DEFAULT_REFILL_THRESHOLD = 10.0  # gallons; level rises >= this fire a refill event
-DEFAULT_INVERT_LEVEL = True  # device reports ullage (empty %); fill = 100 - value
 DEFAULT_ENABLE_PASSTHROUGH = False  # raw TCP relay on 443 so the phone app works
 DEFAULT_PASSTHROUGH_PORT = 443
+
+# Geometry / calibration defaults (standard 275 gal vertical tank).
+DEFAULT_ORIENTATION = ORIENTATION_VERTICAL
+DEFAULT_TANK_HEIGHT = 44.0  # inches the ullage sensor spans (height; diameter if horizontal)
+DEFAULT_RAW_DIVISOR = 254.0  # raw is tenths-of-mm; inches = raw / 254
+DEFAULT_GAL_PER_INCH = 5.9  # vertical slope; matches the app (16.4 in -> 96.8 gal)
 
 LITERS_PER_GALLON = 3.785411784
 
@@ -87,18 +100,18 @@ def _num(value: str) -> Any:
         return value
 
 
-def parse_frame(
-    raw: bytes, tank_gallons: float, invert_level: bool = False
-) -> dict[str, Any] | None:
-    """Parse one telemetry frame into a value dict.
+def parse_frame(raw: bytes) -> dict[str, Any] | None:
+    """Parse one telemetry frame into its raw fields.
 
     Returns None when the payload does not match the expected shape, so the
     caller can still ACK (the device must always be acknowledged) without
-    publishing garbage.
+    publishing garbage. Level/volume are NOT computed here — the coordinator
+    derives them from the raw ullage and the configured tank geometry, because
+    the device's own percentage field does not map linearly to fill.
 
-    The device transmits the *ullage* (empty) percentage on this field; with
-    ``invert_level`` (the default) it is converted to fill percentage as
-    ``100 - value``, matching what the vendor app displays.
+    Frame: ``<id>_<fw>_<devpct>_<tempC>_<ullage_raw>_<rssi>_<flag>``. The
+    ``ullage_raw`` field is the air gap (top of tank to oil surface) in tenths
+    of a millimetre, e.g. ``7010`` -> 701.0 mm -> 27.6 in.
     """
     try:
         text = raw.decode("ascii", "ignore").strip().strip("\x00").strip()
@@ -112,30 +125,81 @@ def parse_frame(
         _LOGGER.debug("Ignoring short frame (%d fields): %r", len(parts), text)
         return None
 
-    device_id, fw, level, temp, raw_dist, rssi, flag = parts[:FRAME_FIELDS]
-
-    try:
-        raw_level = float(level)
-    except ValueError:
-        _LOGGER.debug("Frame has non-numeric level: %r", text)
-        return None
-    raw_level = max(0.0, min(100.0, raw_level))
-
-    fill_pct = 100.0 - raw_level if invert_level else raw_level
-    fill_pct = max(0.0, min(100.0, fill_pct))
-
-    gallons = round(fill_pct / 100.0 * tank_gallons, 1)
-    liters = round(gallons * LITERS_PER_GALLON, 1)
+    device_id, fw, device_pct, temp, ullage_raw, rssi, flag = parts[:FRAME_FIELDS]
 
     return {
         "device_id": device_id,
         "version": fw,
-        "level": round(fill_pct, 1),
-        "level_raw": raw_level,
-        "gallons": gallons,
-        "liters": liters,
+        "device_pct": _num(device_pct),
+        "ullage_raw": _num(ullage_raw),
         "temp_c": _num(temp),
-        "raw": _num(raw_dist),
         "rssi": _num(rssi),
         "flag": _num(flag),
     }
+
+
+def horizontal_gallons(
+    fill_height_in: float, diameter_in: float, rated_gallons: float
+) -> float:
+    """Volume of a round horizontal cylinder filled to ``fill_height_in``.
+
+    Uses the circular-segment area fraction, scaled to the rated capacity.
+    """
+    if diameter_in <= 0:
+        return 0.0
+    r = diameter_in / 2.0
+    h = max(0.0, min(fill_height_in, diameter_in))
+    rh = r - h
+    ratio = max(-1.0, min(1.0, rh / r))
+    segment = r * r * math.acos(ratio) - rh * math.sqrt(max(0.0, 2 * r * h - h * h))
+    fraction = segment / (math.pi * r * r)
+    return fraction * rated_gallons
+
+
+def compute_levels(
+    raw_fields: dict[str, Any],
+    *,
+    orientation: str,
+    tank_height_in: float,
+    raw_divisor: float,
+    gal_per_inch: float,
+    rated_gallons: float,
+) -> dict[str, Any]:
+    """Derive air/oil height, gallons, litres and fill % from the raw ullage."""
+    out = dict(raw_fields)
+    try:
+        ullage = float(raw_fields.get("ullage_raw"))
+    except (TypeError, ValueError):
+        ullage = None
+
+    if ullage is None or raw_divisor <= 0 or tank_height_in <= 0:
+        out.update(
+            {"air_in": None, "oil_in": None, "gallons": None,
+             "liters": None, "level": None}
+        )
+        return out
+
+    air_in = ullage / raw_divisor
+    oil_in = max(0.0, min(tank_height_in, tank_height_in - air_in))
+
+    if orientation == ORIENTATION_HORIZONTAL:
+        gallons = horizontal_gallons(oil_in, tank_height_in, rated_gallons)
+    else:
+        slope = gal_per_inch if gal_per_inch and gal_per_inch > 0 else (
+            rated_gallons / tank_height_in
+        )
+        gallons = oil_in * slope
+
+    gallons = max(0.0, gallons)
+    level = (gallons / rated_gallons * 100.0) if rated_gallons > 0 else 0.0
+
+    out.update(
+        {
+            "air_in": round(air_in, 1),
+            "oil_in": round(oil_in, 1),
+            "gallons": round(gallons, 1),
+            "liters": round(gallons * LITERS_PER_GALLON, 1),
+            "level": round(max(0.0, min(100.0, level)), 1),
+        }
+    )
+    return out

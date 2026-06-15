@@ -9,16 +9,18 @@
           "tank_gallons": "Tank capacity (gallons)",
           "kwh_per_gallon": "Energy content (kWh per gallon)",
           "forward_cloud": "Also forward to the vendor cloud (keeps the phone app working)",
-          "invert_level": "Invert level (device reports empty %)",
+          "orientation": "Tank orientation",
+          "tank_height_inches": "Tank height / diameter (inches)",
           "enable_app_passthrough": "Relay port 443 to the vendor cloud (lets the phone app work)",
           "host": "Listen address"
         },
         "data_description": {
           "port": "The TCP port the sensor connects to. Leave at the default unless you know it differs.",
-          "tank_gallons": "Used to convert the reported fill percentage into gallons. A common residential tank is 275 gallons.",
+          "tank_gallons": "Rated capacity, used as the 100% reference for the fill percentage. A common residential tank is 275 gallons.",
           "kwh_per_gallon": "No. 2 heating oil is about 40.6 kWh per US gallon. Used for the Energy Dashboard sensor.",
           "forward_cloud": "Relays each report to the original cloud so the vendor app keeps updating. Leave off to be fully cloud-free.",
-          "invert_level": "The sensor transmits how *empty* the tank is; this converts it to fill percentage (100 - value). Leave on unless Home Assistant disagrees with your physical gauge in the wrong direction.",
+          "orientation": "Vertical (upright) or horizontal (on its side). Determines how the oil height converts to volume.",
+          "tank_height_inches": "The top-to-bottom distance the sensor measures: tank height for a vertical tank (e.g. 44), or diameter for a horizontal one (e.g. 27).",
           "enable_app_passthrough": "Transparently forwards HTTPS (443) to the vendor cloud so the phone app keeps working while DNS points the sensor's hostname here. Requires port 443 to be free on this host.",
           "host": "Interface to bind. 0.0.0.0 listens on all interfaces."
         }
@@ -43,15 +45,20 @@
           "cloud_port": "Vendor cloud port",
           "offline_after_minutes": "Mark offline after (minutes; 0 = never)",
           "refill_threshold_gallons": "Delivery detection threshold (gallons)",
-          "invert_level": "Invert level (device reports empty %)",
+          "orientation": "Tank orientation",
+          "tank_height_inches": "Tank height / diameter (inches)",
+          "gallons_per_inch": "Gallons per inch (vertical; 0 = auto from height)",
+          "raw_divisor": "Raw-to-inch divisor",
           "enable_app_passthrough": "Relay port 443 to the vendor cloud",
           "passthrough_port": "Passthrough port"
         },
         "data_description": {
           "offline_after_minutes": "If no report arrives within this many minutes, the connectivity sensor turns off. Set to 0 to keep the device 'connected' once seen (useful because the sensor deep-sleeps between reports).",
           "refill_threshold_gallons": "A level rise of at least this many gallons between reports is treated as a delivery and fires a refill event you can automate on.",
-          "invert_level": "Convert the device's empty-percentage to fill percentage (100 - value).",
-          "enable_app_passthrough": "Transparently forward HTTPS to the vendor cloud so the phone app keeps working. Requires the port below to be free on this host."
+          "orientation": "Vertical (upright) or horizontal (on its side).",
+          "tank_height_inches": "Tank height for vertical, or diameter for horizontal (inches).",
+          "gallons_per_inch": "Vertical calibration: gallons per inch of oil height. Compute as (app gallons / oil-height inches) from the device's detail screen, or set 0 to derive it from capacity and height.",
+          "raw_divisor": "Converts the raw ullage reading to inches (inches = raw / divisor). Default 254 (the reading is tenths of a millimetre)."
         }
       }
     }
@@ -64,12 +71,14 @@
   "entity": {
     "sensor": {
       "level": { "name": "Level" },
-      "level_raw": { "name": "Level (raw, empty %)" },
+      "oil_height": { "name": "Oil height" },
+      "air_height": { "name": "Air height" },
+      "device_pct": { "name": "Device percentage" },
       "gallons": { "name": "Remaining" },
       "liters": { "name": "Remaining (litres)" },
       "temperature": { "name": "Temperature" },
       "signal": { "name": "Signal strength" },
-      "raw": { "name": "Raw reading" },
+      "raw": { "name": "Raw ullage" },
       "flag": { "name": "Status flag" },
       "last_report": { "name": "Last report" },
       "energy_consumed": { "name": "Energy consumed" },

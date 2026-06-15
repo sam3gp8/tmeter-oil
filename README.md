@@ -46,30 +46,33 @@ Each report is one underscore-delimited frame:
 |---|---|---|
 | device_id | `58cf791f02b5` | Device id (its MAC, no colons) |
 | fw | `02.00.00` | Firmware/protocol version |
-| level% | `79` | Tank fill percentage (the headline reading) |
+| device % | `79` | Device's own percentage field — **non-linear, not used** |
 | tempC | `23` | Sensor-head temperature, °C |
-| raw | `6960` | Raw sensor/calibration value |
+| ullage_raw | `7010` | **Air gap, tenths of a mm** (701.0 mm = 27.6 in) — the real reading |
 | rssi | `-44` | Wi-Fi signal, dBm |
-| flag | `2` | Status/unit flag (exposed as a diagnostic) |
+| flag | `2` | Status flag (exposed as a diagnostic) |
 
 The server replies with the bytes `30 30 0d 0a` (`"00\r\n"`) to acknowledge.
-Volume is derived locally: `gallons = level% × tank_capacity ÷ 100`.
+Fill is derived from the ullage and tank geometry — see *How the level is
+computed* below.
 
 ## Entities (per tank)
 
 | Entity | Unit | Notes |
 |---|---|---|
-| Level | % | Fill percentage (headline) |
-| Remaining | gal | `level% × capacity` |
+| Level | % | `gallons / rated`, matches the app |
+| Remaining | gal | Computed from ullage + geometry |
+| Oil height | in | Oil depth (matches the app's "Oil height") |
 | Temperature | °C | Auto-displays °F on US systems |
 | **Energy consumed** | **kWh** | **Cumulative — for the Energy Dashboard** |
 | **Oil consumed** | gal | Cumulative volume — optional Water-section sensor |
+| Air height | in | Ullage / air gap (diagnostic) |
 | Signal strength | dBm | Diagnostic |
 | Last report | timestamp | Diagnostic |
 | Connectivity | on/off | Diagnostic (see *Offline detection*) |
 | Remaining (litres) | L | Diagnostic, disabled by default |
-| Level (raw, empty %) | % | What the device transmits; diagnostic, disabled by default |
-| Raw reading / Status flag | — | Diagnostic, disabled by default |
+| Device percentage | % | The device's own (non-linear) field; diagnostic, disabled |
+| Raw ullage / Status flag | — | Diagnostic, disabled by default |
 | Reset consumption | button | Zeroes the consumed/energy odometers |
 
 A Home Assistant device is created automatically the first time each tank
@@ -91,10 +94,6 @@ reports; multiple tanks on the same network are supported by the one listener.
 
 Manual install: copy `custom_components/tmeter_oil/` into your HA config folder
 (so you have `config/custom_components/tmeter_oil/`) and restart.
-
-Or use the one-click link (opens the dialog pre-filled):
-
-[![Open your Home Assistant instance and open a repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sam3gp8&repository=tmeter-oil&category=integration)
 
 ## Setup
 
@@ -163,29 +162,43 @@ Use the integration's **Configure** button to change:
 - **Mark offline after (minutes)** — `0` keeps the device "connected" once
   seen (sensible, since it deep-sleeps between reports). Set this to a bit more
   than your observed reporting interval to get a real connectivity sensor.
-- **Delivery detection threshold (gallons)** — a level rise of at least this
-  many gallons between reports is treated as a delivery (default `10`).
-- **Invert level** — the sensor transmits how *empty* the tank is; this converts
-  it to fill percentage (`100 − value`). On by default. See *Calibration* below.
-- **Relay port 443 to the vendor cloud** / **Passthrough port** — the app
-  passthrough described above.
+- **Tank orientation** — `vertical` (upright) or `horizontal` (on its side).
+  Determines how oil height converts to volume. See *How the level is computed*.
+- **Tank height / diameter (inches)** — the top-to-bottom distance the sensor
+  spans: height for a vertical tank (e.g. 44), diameter for a horizontal one.
+- **Gallons per inch** (vertical) and **Raw-to-inch divisor** — calibration; see
+  below.
 
-## Calibration (level looks wrong)
+## How the level is computed
 
-The sensor reports the tank's **empty percentage** (ullage), and the integration
-inverts it to a fill percentage by default (`fill = 100 − value`). For the
-common vertical tank this is exact and matches the vendor app and your physical
-gauge.
+The sensor measures **ullage** — the air gap from the top of the tank to the oil
+surface — and transmits it raw (in tenths of a millimetre). The integration does
+*not* use the device's own percentage field (it isn't linear with fill). Instead
+it computes everything from the ullage and your tank geometry, the same way the
+vendor cloud does:
 
-To check: compare Home Assistant's **Level** against the float gauge on the tank.
-If they roughly agree, you're set. If Home Assistant reads the *complement* of
-the gauge (e.g. gauge ~⅓ but HA ~65%), toggle **Invert level** in options. The
-disabled-by-default **Level (raw, empty %)** sensor shows exactly what the device
-transmits, which is handy for confirming.
+```
+air_height  = raw / 254              (inches; 254 = tenths-of-mm per inch)
+oil_height  = tank_height - air_height
+vertical:   gallons = oil_height × gallons_per_inch
+horizontal: gallons = round-cylinder segment volume (by oil_height & diameter)
+level %     = gallons / rated_gallons × 100
+```
 
-A **Reset consumption** button is provided per tank (under Controls) to zero the
-*Oil consumed* / *Energy consumed* odometers — useful after changing the tank
-size or inversion, which makes earlier accumulated totals meaningless.
+This reproduces the app exactly. For a standard 275-gal vertical tank the
+defaults (height 44 in, 5.9 gal/in, divisor 254) match the app and gauge to a
+fraction of a gallon. Sensors for **Oil height** and **Air height** are exposed
+so you can compare directly against the app's own readout.
+
+**Calibrating gallons-per-inch (vertical):** open the device's detail screen in
+the vendor app, read its gallons and oil-height inches, and set **Gallons per
+inch** = gallons ÷ oil-height. (Setting it to `0` derives it from rated capacity
+÷ tank height instead.) The disabled **Device percentage** and **Raw ullage**
+sensors expose exactly what the device transmits, for verification.
+
+A **Reset consumption** button is provided per tank (under Configuration) to
+zero the *Oil consumed* / *Energy consumed* odometers — useful after changing the
+tank geometry, which makes earlier accumulated totals meaningless.
 
 ## Delivery / refill detection
 

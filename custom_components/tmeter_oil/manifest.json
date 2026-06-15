@@ -1,7 +1,7 @@
 {
   "domain": "tmeter_oil",
   "name": "T-Meter Oil Tank (Local)",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "documentation": "https://github.com/sam3gp8/tmeter-oil",
   "issue_tracker": "https://github.com/sam3gp8/tmeter-oil/issues",
   "codeowners": ["@sam3gp8"],

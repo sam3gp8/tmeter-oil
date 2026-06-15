@@ -21,28 +21,38 @@ from .const import (
     CONF_CLOUD_PORT,
     CONF_ENABLE_PASSTHROUGH,
     CONF_FORWARD_CLOUD,
+    CONF_GAL_PER_INCH,
     CONF_HOST,
-    CONF_INVERT_LEVEL,
     CONF_KWH_PER_GALLON,
     CONF_OFFLINE_AFTER,
+    CONF_ORIENTATION,
     CONF_PASSTHROUGH_PORT,
     CONF_PORT,
+    CONF_RAW_DIVISOR,
     CONF_REFILL_THRESHOLD,
     CONF_TANK_GALLONS,
+    CONF_TANK_HEIGHT,
     DEFAULT_CLOUD_HOST,
     DEFAULT_CLOUD_PORT,
     DEFAULT_ENABLE_PASSTHROUGH,
     DEFAULT_FORWARD_CLOUD,
+    DEFAULT_GAL_PER_INCH,
     DEFAULT_HOST,
-    DEFAULT_INVERT_LEVEL,
     DEFAULT_KWH_PER_GALLON,
     DEFAULT_OFFLINE_AFTER,
+    DEFAULT_ORIENTATION,
     DEFAULT_PASSTHROUGH_PORT,
     DEFAULT_PORT,
+    DEFAULT_RAW_DIVISOR,
     DEFAULT_REFILL_THRESHOLD,
     DEFAULT_TANK_GALLONS,
+    DEFAULT_TANK_HEIGHT,
     DOMAIN,
+    ORIENTATION_HORIZONTAL,
+    ORIENTATION_VERTICAL,
 )
+
+ORIENTATIONS = [ORIENTATION_VERTICAL, ORIENTATION_HORIZONTAL]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,8 +112,17 @@ class TMeterConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_REFILL_THRESHOLD: user_input.get(
                             CONF_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD
                         ),
-                        CONF_INVERT_LEVEL: user_input.get(
-                            CONF_INVERT_LEVEL, DEFAULT_INVERT_LEVEL
+                        CONF_ORIENTATION: user_input.get(
+                            CONF_ORIENTATION, DEFAULT_ORIENTATION
+                        ),
+                        CONF_TANK_HEIGHT: user_input.get(
+                            CONF_TANK_HEIGHT, DEFAULT_TANK_HEIGHT
+                        ),
+                        CONF_GAL_PER_INCH: user_input.get(
+                            CONF_GAL_PER_INCH, DEFAULT_GAL_PER_INCH
+                        ),
+                        CONF_RAW_DIVISOR: user_input.get(
+                            CONF_RAW_DIVISOR, DEFAULT_RAW_DIVISOR
                         ),
                         CONF_ENABLE_PASSTHROUGH: user_input.get(
                             CONF_ENABLE_PASSTHROUGH, DEFAULT_ENABLE_PASSTHROUGH
@@ -131,8 +150,11 @@ class TMeterConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_FORWARD_CLOUD, default=DEFAULT_FORWARD_CLOUD
                     ): bool,
                     vol.Optional(
-                        CONF_INVERT_LEVEL, default=DEFAULT_INVERT_LEVEL
-                    ): bool,
+                        CONF_ORIENTATION, default=DEFAULT_ORIENTATION
+                    ): vol.In(ORIENTATIONS),
+                    vol.Optional(
+                        CONF_TANK_HEIGHT, default=DEFAULT_TANK_HEIGHT
+                    ): vol.All(vol.Coerce(float), vol.Range(min=1, max=500)),
                     vol.Optional(
                         CONF_ENABLE_PASSTHROUGH,
                         default=DEFAULT_ENABLE_PASSTHROUGH,
@@ -197,9 +219,21 @@ class TMeterOptionsFlow(OptionsFlow):
                         ),
                     ): vol.All(vol.Coerce(float), vol.Range(min=1, max=100000)),
                     vol.Optional(
-                        CONF_INVERT_LEVEL,
-                        default=opts.get(CONF_INVERT_LEVEL, DEFAULT_INVERT_LEVEL),
-                    ): bool,
+                        CONF_ORIENTATION,
+                        default=opts.get(CONF_ORIENTATION, DEFAULT_ORIENTATION),
+                    ): vol.In(ORIENTATIONS),
+                    vol.Optional(
+                        CONF_TANK_HEIGHT,
+                        default=opts.get(CONF_TANK_HEIGHT, DEFAULT_TANK_HEIGHT),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=1, max=500)),
+                    vol.Optional(
+                        CONF_GAL_PER_INCH,
+                        default=opts.get(CONF_GAL_PER_INCH, DEFAULT_GAL_PER_INCH),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0, max=1000)),
+                    vol.Optional(
+                        CONF_RAW_DIVISOR,
+                        default=opts.get(CONF_RAW_DIVISOR, DEFAULT_RAW_DIVISOR),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.001, max=100000)),
                     vol.Optional(
                         CONF_ENABLE_PASSTHROUGH,
                         default=opts.get(
