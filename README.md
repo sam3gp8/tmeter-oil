@@ -92,6 +92,10 @@ reports; multiple tanks on the same network are supported by the one listener.
 Manual install: copy `custom_components/tmeter_oil/` into your HA config folder
 (so you have `config/custom_components/tmeter_oil/`) and restart.
 
+Or use the one-click link (opens the dialog pre-filled):
+
+[![Open your Home Assistant instance and open a repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sam3gp8&repository=tmeter-oil&category=integration)
+
 ## Setup
 
 ### 1. Add the integration
