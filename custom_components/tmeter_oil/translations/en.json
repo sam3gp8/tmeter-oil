@@ -1,0 +1,85 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "T-Meter Oil Tank (Local)",
+        "description": "Home Assistant will listen for your oil-tank sensor's local reports. Add a DNS rewrite (in AdGuard/Pi-hole/your router) pointing the sensor's cloud hostname to this Home Assistant host, then the device reports here instead of the cloud.",
+        "data": {
+          "port": "Listen port",
+          "tank_gallons": "Tank capacity (gallons)",
+          "kwh_per_gallon": "Energy content (kWh per gallon)",
+          "forward_cloud": "Also forward to the vendor cloud (keeps the phone app working)",
+          "invert_level": "Invert level (device reports empty %)",
+          "enable_app_passthrough": "Relay port 443 to the vendor cloud (lets the phone app work)",
+          "host": "Listen address"
+        },
+        "data_description": {
+          "port": "The TCP port the sensor connects to. Leave at the default unless you know it differs.",
+          "tank_gallons": "Used to convert the reported fill percentage into gallons. A common residential tank is 275 gallons.",
+          "kwh_per_gallon": "No. 2 heating oil is about 40.6 kWh per US gallon. Used for the Energy Dashboard sensor.",
+          "forward_cloud": "Relays each report to the original cloud so the vendor app keeps updating. Leave off to be fully cloud-free.",
+          "invert_level": "The sensor transmits how *empty* the tank is; this converts it to fill percentage (100 - value). Leave on unless Home Assistant disagrees with your physical gauge in the wrong direction.",
+          "enable_app_passthrough": "Transparently forwards HTTPS (443) to the vendor cloud so the phone app keeps working while DNS points the sensor's hostname here. Requires port 443 to be free on this host.",
+          "host": "Interface to bind. 0.0.0.0 listens on all interfaces."
+        }
+      }
+    },
+    "error": {
+      "port_in_use": "That port is already in use on this host. Choose a different port or free the one in use."
+    },
+    "abort": {
+      "single_instance_allowed": "T-Meter Oil Tank is already configured. One listener serves all of your tanks."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "T-Meter options",
+        "data": {
+          "tank_gallons": "Tank capacity (gallons)",
+          "kwh_per_gallon": "Energy content (kWh per gallon)",
+          "forward_cloud": "Also forward to the vendor cloud",
+          "cloud_host": "Vendor cloud host",
+          "cloud_port": "Vendor cloud port",
+          "offline_after_minutes": "Mark offline after (minutes; 0 = never)",
+          "refill_threshold_gallons": "Delivery detection threshold (gallons)",
+          "invert_level": "Invert level (device reports empty %)",
+          "enable_app_passthrough": "Relay port 443 to the vendor cloud",
+          "passthrough_port": "Passthrough port"
+        },
+        "data_description": {
+          "offline_after_minutes": "If no report arrives within this many minutes, the connectivity sensor turns off. Set to 0 to keep the device 'connected' once seen (useful because the sensor deep-sleeps between reports).",
+          "refill_threshold_gallons": "A level rise of at least this many gallons between reports is treated as a delivery and fires a refill event you can automate on.",
+          "invert_level": "Convert the device's empty-percentage to fill percentage (100 - value).",
+          "enable_app_passthrough": "Transparently forward HTTPS to the vendor cloud so the phone app keeps working. Requires the port below to be free on this host."
+        }
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "refill": "Oil delivery detected"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "level": { "name": "Level" },
+      "level_raw": { "name": "Level (raw, empty %)" },
+      "gallons": { "name": "Remaining" },
+      "liters": { "name": "Remaining (litres)" },
+      "temperature": { "name": "Temperature" },
+      "signal": { "name": "Signal strength" },
+      "raw": { "name": "Raw reading" },
+      "flag": { "name": "Status flag" },
+      "last_report": { "name": "Last report" },
+      "energy_consumed": { "name": "Energy consumed" },
+      "oil_consumed": { "name": "Oil consumed" }
+    },
+    "binary_sensor": {
+      "connectivity": { "name": "Connectivity" }
+    },
+    "button": {
+      "reset_consumption": { "name": "Reset consumption" }
+    }
+  }
+}

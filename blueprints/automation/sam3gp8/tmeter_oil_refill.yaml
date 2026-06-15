@@ -1,0 +1,42 @@
+blueprint:
+  name: T-Meter Oil Delivery Notification
+  description: >
+    Sends a notification when the T-Meter Oil Tank (Local) integration detects an
+    oil delivery / refill (the tank level jumps up). The message includes how
+    many gallons were added and the new fill level.
+  domain: automation
+  author: sam3gp8
+  source_url: https://github.com/sam3gp8/tmeter-oil/blob/main/blueprints/automation/sam3gp8/tmeter_oil_refill.yaml
+  input:
+    tank_device:
+      name: Oil tank
+      description: The T-Meter oil tank to watch.
+      selector:
+        device:
+          integration: tmeter_oil
+    notify_service:
+      name: Notification service
+      description: >
+        The notify service to call, e.g. notify.mobile_app_your_phone or
+        notify.persistent_notification.
+      default: notify.persistent_notification
+      selector:
+        text:
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: device
+    domain: tmeter_oil
+    device_id: !input tank_device
+    type: refill
+
+action:
+  - service: !input notify_service
+    data:
+      title: "Oil delivery detected"
+      message: >
+        +{{ trigger.event.data.gallons_added }} gal delivered.
+        Tank now {{ trigger.event.data.level }}%
+        ({{ trigger.event.data.gallons }} gal).
